@@ -1,14 +1,17 @@
-from plot_utils import plot_loss_curve, plot_dataset_pairs, plot_dataset_distribution, scatter_plot
 import torch
 from sklearn.datasets import fetch_california_housing
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from models import NeuralNet, BinaryNeuralNet, BinaryNeuralNetSoftmax
-from train import train_eval_model, train_eval_model_binary
-from plot_utils import plot_loss_accuracy_curve, plot_confusion_matrix
 import pandas as pd
 import numpy as np
 import os
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import torch.nn as nn
+import torch.nn.functional as F
+
+
 torch.manual_seed(302)
 np.random.seed(302)
 
@@ -54,6 +57,314 @@ TASK3_EPOCHS = 25
 
 TASK4_LEARNING_RATE = 0.05
 TASK4_EPOCHS = 15
+
+def train_eval_model(train_loader,
+                     val_loader,
+                     model,
+                     epochs:int=5,
+                     learning_rate:float=0.01):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    train_losses = []
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    loss_fn = nn.MSELoss()
+
+    avg_train_epoch_loss = []
+    avg_val_epoch_loss = []
+
+    for epoch in range(epochs):
+        #print("-"*10, f"Epoch {epoch}", "-"*10)
+        epoch_train_loss = 0
+        model.train() # modus flag for training
+        for batch_idx, (data, target) in enumerate(train_loader):
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            pred = model(data)
+            loss = loss_fn(pred, target)
+            loss.backward()
+            optimizer.step()
+            epoch_train_loss += loss.item()
+            train_losses.append(loss.item())
+            
+        avg_train_epoch_loss.append(epoch_train_loss/len(train_loader))
+        
+        model.eval()
+        epoch_val_loss = 0
+
+        with torch.no_grad():
+            for data, target in val_loader:
+                data, target = data.to(device), target.to(device)
+                pred = model(data)
+                loss = loss_fn(pred, target)
+                epoch_val_loss += loss.item()
+
+        avg_val_epoch_loss.append(epoch_val_loss/len(val_loader))
+        
+        #print(f"Epoch {epoch}: Train Loss: {epoch_train_loss/len(train_loader):.4f}, Val Loss: {epoch_val_loss/len(val_loader):.4f}\n")
+
+    return avg_train_epoch_loss, avg_val_epoch_loss
+
+def train_eval_model_binary(train_loader,
+                     test_loader,
+                     model,
+                     epochs:int=5,
+                     learning_rate:float=0.001,
+                     lossfunc='bceloss'):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model.to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    if lossfunc == 'bceloss':
+        loss_fn = nn.BCELoss()
+    elif lossfunc == 'nllloss':
+        loss_fn = nn.NLLLoss()
+
+    avg_train_epoch_loss = []
+    avg_val_epoch_loss = []
+    avg_accuracies = []
+    correct = 0
+    for epoch in range(epochs):
+        epoch_train_loss = 0
+        model.train() # modus flag for training
+        for batch_idx, (data, target) in enumerate(train_loader):
+            
+            optimizer.zero_grad()
+            if lossfunc == 'bceloss':
+                data, target = data.to(device), target.to(device)   
+            else:
+                data, target = data.to(device), target.to(device).view(-1).long()
+          
+            prob = model(data)  
+            loss = loss_fn(prob, target)
+            loss.backward()
+            optimizer.step()
+            epoch_train_loss += loss.item()
+
+        avg_train_epoch_loss.append(epoch_train_loss/len(train_loader))
+        model.eval()
+        epoch_val_loss = 0
+        correct = 0
+
+        with torch.no_grad():
+            for data, target in test_loader:
+                
+                if lossfunc == 'bceloss':
+                    data, target = data.to(device), target.to(device)
+                else:
+                    data, target = data.to(device), target.to(device).view(-1).long()
+                prob = model(data)
+                loss = loss_fn(prob, target)
+                epoch_val_loss += loss.item()
+                if lossfunc == 'bceloss':
+                    pred_cls = (prob >= 0.5).float()
+                elif lossfunc == 'nllloss':
+                    pred_cls = prob.argmax(dim=1)
+                correct += (pred_cls == target).sum().item()
+        
+        avg_correct = correct/len(test_loader.dataset)
+        avg_accuracies.append(avg_correct)
+        
+
+        avg_val_epoch_loss.append(epoch_val_loss/len(test_loader))
+        
+        print(f"Epoch {epoch}: Train Loss: {epoch_train_loss/len(train_loader):.4f}, \
+               Val Loss: {epoch_val_loss/len(test_loader):.4f} \
+                Accuracy: {round(avg_correct*100, 1)}%\n")
+
+    return avg_train_epoch_loss, avg_val_epoch_loss, avg_accuracies
+
+
+class NeuralNet(nn.Module):
+    def __init__(self, layer_sizes):
+        super(NeuralNet, self).__init__()
+        self.layer_sizes = layer_sizes
+        self.layers = nn.ModuleList([
+            nn.Linear(in_features=self.layer_sizes[i], out_features=self.layer_sizes[i+1]) for i in range(len(layer_sizes) -1)
+        ])
+        
+    def forward(self, x):
+        # no flatting necessary because dataset is already flat
+        # in constrast to images which have px and channel
+        for layer in self.layers[:-1]:
+            x = layer(x)
+            x = F.relu(x)
+        x = self.layers[-1](x)
+        return x
+
+class BinaryNeuralNet(nn.Module):
+    def __init__(self):
+        super(BinaryNeuralNet, self).__init__()
+        self.fc1 = nn.Linear(in_features=8, out_features=16)
+        self.fc2 = nn.Linear(in_features=16, out_features=32)
+        self.fc3 = nn.Linear(in_features=32, out_features=16)
+        self.fc4 = nn.Linear(in_features=16, out_features=8)
+        self.fc5 = nn.Linear(in_features=8, out_features=1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        x = self.fc3(x)
+        x = F.relu(x)
+        x = self.fc4(x)
+        x = F.relu(x)
+        x = self.fc5(x)
+        sig = nn.Sigmoid()
+        return sig(x)
+    
+class BinaryNeuralNetSoftmax(nn.Module):
+    def __init__(self):
+        super(BinaryNeuralNetSoftmax, self).__init__()
+        self.fc1 = nn.Linear(in_features=8, out_features=16)
+        self.fc2 = nn.Linear(in_features=16, out_features=32)
+        self.fc3 = nn.Linear(in_features=32, out_features=16)
+        self.fc4 = nn.Linear(in_features=16, out_features=8)
+        self.fc5 = nn.Linear(in_features=8, out_features=2)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        x = self.fc3(x)
+        x = F.relu(x)
+        x = self.fc4(x)
+        x = F.relu(x)
+        x = self.fc5(x)
+        soft = F.log_softmax(x, dim=1)
+        return soft
+
+def plot_dataset_distribution(data: np.ndarray,
+                          feature_names: list[str],
+                          title: str = 'Graph',
+                          export: bool = False,
+                          export_title: str = 'figexport',
+                          show_plot: bool = True):
+    num_features = data.shape[1]
+    fig, axes = plt.subplots(int(num_features/2), 2, figsize=(16, 16))
+    for i in range(num_features):
+        row = int(i % (num_features / 2))
+        col = int(i // (num_features / 2))
+        axes[row, col].hist(data[:, i], bins=50, color='gray', alpha=0.7)
+        axes[row, col].set_xlabel(feature_names[i], size=14)
+        axes[row, col].set_ylabel('Abundancy', size=14)
+    plt.tight_layout()
+    plt.title(title)
+    if show_plot:
+        plt.show()
+    if export:
+        os.makedirs('./exports/hist/', exist_ok=True)
+        fig.savefig(f"./exports/hist/{export_title}.png",
+                    dpi=300)
+    plt.close()
+    
+def plot_dataset_pairs(data_x: np.ndarray,
+                             feature_names: list[str],
+                             export: bool = False,
+                             export_title: str = 'figexport',
+                             show_plot: bool = True):
+    num_features = data_x.shape[1]
+    fig, axes = plt.subplots(num_features, num_features, figsize=(16, 16))
+    for i in range(num_features):
+        for j in range(num_features):
+            if i == j:
+                axes[i, j].hist(data_x[:, i], bins=50, color='gray', alpha=0.7)
+                axes[i, j].set_title(f"{feature_names[i]} Distribution")
+            elif i > j:
+                axes[i, j].scatter(data_x[:, j], data_x[:, i], alpha=0.5, s=3)
+            else:
+                axes[i, j].set_visible(False)
+            if i == num_features - 1:
+                axes[i, j].set_xlabel(feature_names[j])
+            if j == 0:
+                axes[i, j].set_ylabel(feature_names[i])
+    plt.tight_layout()
+    plt.title("Histogram: Feature pairs")
+    if show_plot:
+        plt.show()
+    if export:
+        os.makedirs('./exports/dataset_pairs', exist_ok=True)
+        fig.savefig(f"./exports/dataset_pairs/{export_title}.png",
+                    dpi=300)
+    plt.close()
+
+def plot_loss_curve(train_loss,
+                    val_loss,
+                    export_folder="exports",
+                    val_loss_label="Validation Loss",
+                    export_name="losscurve",
+                    show_plot:bool=False):
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(train_loss)), train_loss, alpha=0.5, color='red', label='Train Loss')
+    plt.plot(range(len(val_loss)), val_loss, alpha=0.7, color='blue', label=val_loss_label)
+    plt.title('Loss curves')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    if show_plot:
+        plt.show()
+    os.makedirs(export_folder, exist_ok=True)
+    plt.savefig(f"{export_folder}/{export_name}.png", dpi=100)
+    plt.close()
+
+def plot_loss_accuracy_curve(train_loss,
+                             val_loss,
+                             accuracies,
+                             export_folder="exports",
+                             val_loss_label="Validation Loss",
+                             export_name="losscurve",
+                             show_plot:bool=False):
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(train_loss)), train_loss, alpha=0.5, color='red', label='Train Loss')
+    plt.plot(range(len(val_loss)), val_loss, alpha=0.7, color='blue', label=val_loss_label)
+    plt.plot(range(len(accuracies)), accuracies, alpha=0.7, color='green', label='Accuracy')
+    plt.title('Loss & Accuracy curves')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss / Accuracy')
+    plt.legend()
+    if show_plot:
+        plt.show()
+    os.makedirs(export_folder, exist_ok=True)
+    plt.savefig(f"{export_folder}/{export_name}.png", dpi=300)
+    plt.close()
+
+def scatter_plot(y_true,
+                 y_pred,
+                 export_folder="exports/task3_predict/",
+                 filename="scatterplot",
+                 show_plot:bool=False):
+    plt.figure(figsize=(8, 8))
+    plt.scatter(y_pred, y_true)
+    plt.title("Predicted vs. True House Prices")
+    plt.xlabel("Predicted Price [in 100,000 USD]")
+    plt.ylabel("True Price [in 100,000 USD]")
+    if show_plot:
+        plt.show()
+    os.makedirs(export_folder, exist_ok=True)
+    plt.savefig(f"{export_folder}/{filename}.png", dpi=300)
+    plt.close()
+
+def plot_confusion_matrix(y_true,
+                          y_pred,
+                          export_folder="exports",
+                          filename="confusion_matrix",
+                          show_plot:bool=False):
+    cm = confusion_matrix(y_true, y_pred)
+
+    plt.figure(figsize=(8,6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['< $200k', '>= $200k'],
+                yticklabels=['< $200k', '>= $200k'])
+    plt.title('Confusion Matrix', fontsize=15)
+    plt.ylabel('True label', fontsize=13)
+    plt.xlabel('Predicted Label', fontsize=13)
+    if show_plot:
+        plt.show()
+    plt.tight_layout()
+    os.makedirs(export_folder, exist_ok=True)
+    plt.savefig(f"{export_folder}/{filename}.png", dpi=300)
+    plt.close()
+
 
 def gather_split_data():
     X, y = fetch_california_housing(return_X_y=True)
@@ -140,7 +451,6 @@ def prepare_data_task4():
                              y_test=y_test)
     return data
 
-
 ### TASK 1
 ### Preparing and loading data, plotting histogram, returning loaded data
 def task1():
@@ -156,7 +466,7 @@ def task1():
         title='Training set data distribution',
         export=True,
         export_title='task1_training_set_distribution',
-        show_plot=False
+        show_plot=False,
     )
 
     plot_dataset_distribution(
@@ -171,7 +481,7 @@ def task1():
     plot_dataset_distribution(
         data=transformed_X_val_split,
         feature_names=feature_names,
-        title='Fit transformed training data',
+        title='Fit transformed validation data',
         export=True,
         export_title='task1_val_set_distrib_fit_transformed',
         show_plot=False
@@ -398,34 +708,33 @@ def task4(training_val_dataloader, test_dataloader, X_test_tensor, y_test, lossf
                           filename="confusion_matrix")
     
 
+def main():
+    data = task1()
+    task2(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
+    task3(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
+    final_trained_model = task3_final_training(training_and_val_dataloader=data['training_and_val_dataloader'],
+                                            test_dataloader=data['test_dataloader'])
+    task3_predict(model=final_trained_model,
+                X_test_tensor=data['X_test_tensor'],
+                y_true=data['y_test'])
+
+    data_task4 = prepare_data_task4()
+
+    print(f"Training dataset size: {len(data_task4['training_and_val_dataloader'].dataset)}")
+    print(f"Test dataset size: {len(data_task4['test_dataloader'].dataset)}")
+
+    task4(training_val_dataloader=data_task4['training_and_val_dataloader'],
+        test_dataloader=data_task4['test_dataloader'],
+        X_test_tensor=data_task4['X_test_tensor'],
+        y_test=data_task4['y_test'],
+        lossfunc='nllloss')
+
+    task4(training_val_dataloader=data_task4['training_and_val_dataloader'],
+        test_dataloader=data_task4['test_dataloader'],
+        X_test_tensor=data_task4['X_test_tensor'],
+        y_test=data_task4['y_test'],
+        lossfunc='bceloss')
 
 
-
-#data = task1()
-#task2(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
-#task3(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
-#final_trained_model = task3_final_training(training_and_val_dataloader=data['training_and_val_dataloader'],
-                                           #test_dataloader=data['test_dataloader'])
-#task3_predict(model=final_trained_model, X_test_tensor=data['X_test_tensor'], y_true=data['y_test'])
-
-data_task4 = prepare_data_task4()
-
-print(f"Training dataset size: {len(data_task4['training_and_val_dataloader'].dataset)}")
-print(f"Test dataset size: {len(data_task4['test_dataloader'].dataset)}")
-
-task4(training_val_dataloader=data_task4['training_and_val_dataloader'],
-      test_dataloader=data_task4['test_dataloader'],
-      X_test_tensor=data_task4['X_test_tensor'],
-      y_test=data_task4['y_test'],
-      lossfunc='nllloss')
-
-task4(training_val_dataloader=data_task4['training_and_val_dataloader'],
-      test_dataloader=data_task4['test_dataloader'],
-      X_test_tensor=data_task4['X_test_tensor'],
-      y_test=data_task4['y_test'],
-      lossfunc='bceloss')
-
-
-
-
-### TASK 4
+if __name__ == '__main__':
+    main()
