@@ -11,12 +11,16 @@ import seaborn as sns
 import torch.nn as nn
 import torch.nn.functional as F
 
+SEED = 302
+torch.manual_seed(SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(SEED)
 
-torch.manual_seed(302)
-np.random.seed(302)
+np.random.seed(SEED)
+
 
 g = torch.Generator()
-g.manual_seed(302)
+g.manual_seed(SEED)
 
 feature_names = ['MedInc',
                 'HouseAge',
@@ -174,6 +178,9 @@ def train_eval_model_binary(train_loader,
 
 
 class NeuralNet(nn.Module):
+    """
+    Model structure for task 2 (testing different model architectures)
+    """
     def __init__(self, layer_sizes):
         super(NeuralNet, self).__init__()
         self.layer_sizes = layer_sizes
@@ -191,6 +198,9 @@ class NeuralNet(nn.Module):
         return x
 
 class BinaryNeuralNet(nn.Module):
+    """
+    Variant 1 for task 4: output via sigmoid function for binary classification
+    """
     def __init__(self):
         super(BinaryNeuralNet, self).__init__()
         self.fc1 = nn.Linear(in_features=8, out_features=16)
@@ -213,6 +223,9 @@ class BinaryNeuralNet(nn.Module):
         return sig(x)
     
 class BinaryNeuralNetSoftmax(nn.Module):
+    """
+    Variant 2 of model for task 4: output via log softmax for multiclass classification
+    """
     def __init__(self):
         super(BinaryNeuralNetSoftmax, self).__init__()
         self.fc1 = nn.Linear(in_features=8, out_features=16)
@@ -240,6 +253,9 @@ def plot_dataset_distribution(data: np.ndarray,
                           export: bool = False,
                           export_title: str = 'figexport',
                           show_plot: bool = True):
+    """
+    Plotting histograms of feature pairs for task 1
+    """
     num_features = data.shape[1]
     fig, axes = plt.subplots(int(num_features/2), 2, figsize=(16, 16))
     for i in range(num_features):
@@ -263,6 +279,9 @@ def plot_dataset_pairs(data_x: np.ndarray,
                              export: bool = False,
                              export_title: str = 'figexport',
                              show_plot: bool = True):
+    """
+    Scatter plot, iterating through all data pairs
+    """
     num_features = data_x.shape[1]
     fig, axes = plt.subplots(num_features, num_features, figsize=(16, 16))
     for i in range(num_features):
@@ -333,8 +352,11 @@ def scatter_plot(y_true,
                  export_folder="exports/task3_predict/",
                  filename="scatterplot",
                  show_plot:bool=False):
+    """
+    Scatter plot for plotting predicted vs true y values
+    """
     plt.figure(figsize=(8, 8))
-    plt.scatter(y_pred, y_true)
+    plt.scatter(x=y_pred, y=y_true)
     plt.title("Predicted vs. True House Prices")
     plt.xlabel("Predicted Price [in 100,000 USD]")
     plt.ylabel("True Price [in 100,000 USD]")
@@ -349,6 +371,9 @@ def plot_confusion_matrix(y_true,
                           export_folder="exports",
                           filename="confusion_matrix",
                           show_plot:bool=False):
+    """
+    Confusion matrix plot for binary classification task 4
+    """
     cm = confusion_matrix(y_true, y_pred)
 
     plt.figure(figsize=(8,6))
@@ -367,6 +392,10 @@ def plot_confusion_matrix(y_true,
 
 
 def gather_split_data():
+    """
+    Downloading/fetching data and splitting it into train, validation and test set
+    Returning for fitting, transformation and loading
+    """
     X, y = fetch_california_housing(return_X_y=True)
     print(f"Original dataset size: {X.shape[0]}")
     X_train, X_test, y_train, y_test = train_test_split(
@@ -394,6 +423,10 @@ def load_prepare_data(transformed_X_train_split,
                       y_val,
                       transformed_X_test_split,
                       y_test):
+    
+    """
+    Converting np arr into tensors and loading into DataLoader for training
+    """
 
     X_train_tensor, y_train_tensor = torch.from_numpy(transformed_X_train_split).float(), torch.from_numpy(y_train).float().reshape(-1, 1)
     # reshape is necessary so that y_train has 2D structure with one column and x rows like x_train has 8 columns and x rows
@@ -434,6 +467,10 @@ def load_prepare_data(transformed_X_train_split,
     return data
 
 def prepare_data_task4():
+    """
+    Data preparation specifically for task 4
+    Setting y values to class 0 or 1
+    """
     X_train, y_train, X_test, y_test, X_val, y_val = gather_split_data()
     scaler = StandardScaler()
     transformed_X_train_split = scaler.fit_transform(X=X_train)
@@ -451,9 +488,13 @@ def prepare_data_task4():
                              y_test=y_test)
     return data
 
-### TASK 1
-### Preparing and loading data, plotting histogram, returning loaded data
+
 def task1():
+    """
+    ### TASK 1
+    ### Preparing and loading data, plotting histogram, returning loaded data for task 2, 3 and 4
+    """
+    print("Executing first task: Data preparation & histogram plotting.")
     X_train, y_train, X_test, y_test, X_val, y_val = gather_split_data()
     scaler = StandardScaler()
     transformed_X_train_split = scaler.fit_transform(X=X_train)
@@ -503,18 +544,18 @@ def task1():
                                                                                                        
     return data
 
-### TASK 2
-### Iterating through different model architecture designs and hyperparameters
+
 def task2(training_dataloader, val_dataloader):
-
-
+    """
+    Training different model architectures w/ different hyperparameters
+    Export of important output values to xlsx file for comparison of model architectures and hyperp.
+    """
+    print("Executing task 2: Training different model arch and hyperparams. Export of output to xlsx file.")
     df_data = []
     for i, layersize in enumerate(TASK2_MODEL_ARCHITECTURES):
         for j, learning_rate in enumerate(TASK2_HYPERPARAMETERS['learning_rate']):
             for k, epoch_num in enumerate(TASK2_HYPERPARAMETERS['epochs']):
                 print(f"Arch {i}, Learning Rate {j}, Epoch Var {k}")
-                SEED = 302
-                torch.manual_seed(SEED)
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed_all(SEED)
                 model_arch = NeuralNet(layer_sizes=layersize)
@@ -556,54 +597,14 @@ def task2(training_dataloader, val_dataloader):
     df = pd.DataFrame(df_data)
     df.to_excel("exports/losses/training_model_variation_test.xlsx")
 
-def task3(training_dataloader, val_dataloader):
-    selected_architecture = TASK3_FINAL_MODEL_ARCHITECTURE
-    SEED = 302
-    torch.manual_seed(SEED)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(SEED)
-    model = NeuralNet(selected_architecture)
-    lr = TASK3_LR
-    epoch_num = TASK3_EPOCHS
-    train_loss, val_loss = train_eval_model(
-                train_loader=training_dataloader,
-                val_loader=val_dataloader,
-                model=model,
-                epochs=epoch_num,
-                learning_rate=lr)
-    losses = {
-            'train_loss': train_loss,
-            'val_loss': val_loss,
-            'epochs': [i for i in range (1, epoch_num+1)]
-        }
-    new_df = pd.DataFrame(losses)
-    best_train_row = new_df.nsmallest(1, 'train_loss').iloc[0]
-    best_val_row = new_df.nsmallest(1, 'val_loss').iloc[0]
 
-    plot_loss_curve(
-        train_loss=train_loss,
-        val_loss=val_loss,
-        export_folder=f"exports/task3/",
-        export_name="task3_losscurve"
-    )
-    data = {
-        'train_loss': train_loss,
-        'val_loss': val_loss,
-        'epochs': [i for i in range(1, epoch_num+1)]
-    }
-    print("-"*30)
-    print(f"Last Train loss: {train_loss[-1]} and last Val Loss: {val_loss[-1]} | Epoch {epoch_num}\n")
-    print(f"Best Training Loss: {best_train_row['train_loss']} | Epoch: {best_train_row['epochs']}\n")
-    print(f"Best Val Loss: {best_val_row['val_loss']} | Epoch: {best_val_row['epochs']}\n")
-    print("-"*30)
-    df = pd.DataFrame(data)
-    df.to_excel("exports/task3/chosen_model_plot_data.xlsx")
-    return model
-
-def task3_final_training(training_and_val_dataloader, test_dataloader):
+def task3(training_and_val_dataloader, test_dataloader):
+    """
+    Final training of model w/ selected arch and hyperp.
+    Returning model for prediction on test dataset
+    """
+    print("Executing task 3: Final training with selected model architecture.")
     selected_architecture = TASK3_FINAL_MODEL_ARCHITECTURE
-    SEED = 302
-    torch.manual_seed(SEED)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(SEED)
     model = NeuralNet(selected_architecture)
@@ -645,7 +646,9 @@ def task3_final_training(training_and_val_dataloader, test_dataloader):
     return model
 
 def task3_predict(model, X_test_tensor, y_true):
+    print("Executing task 3 prediction: Prediction on test data.")
     model.eval()
+    loss_fn = nn.MSELoss()
     with torch.no_grad():
         prediction_array = model(X_test_tensor)
         scatter_plot(y_true=y_true,
@@ -653,8 +656,11 @@ def task3_predict(model, X_test_tensor, y_true):
                      export_folder="exports/task3_predict")
 
 def task4(training_val_dataloader, test_dataloader, X_test_tensor, y_test, lossfunc='bceloss'):
-    SEED = 302
-    torch.manual_seed(SEED)
+    """
+    Training binary / multiclass classification model
+    Plotting loss curve + confusion matrix
+    """
+    print("Executing task 4: Classification.")
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(SEED)
     if lossfunc == 'bceloss':
@@ -710,9 +716,8 @@ def task4(training_val_dataloader, test_dataloader, X_test_tensor, y_test, lossf
 
 def main():
     data = task1()
-    task2(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
-    task3(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
-    final_trained_model = task3_final_training(training_and_val_dataloader=data['training_and_val_dataloader'],
+    #task2(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
+    final_trained_model = task3(training_and_val_dataloader=data['training_and_val_dataloader'],
                                             test_dataloader=data['test_dataloader'])
     task3_predict(model=final_trained_model,
                 X_test_tensor=data['X_test_tensor'],
@@ -723,12 +728,14 @@ def main():
     print(f"Training dataset size: {len(data_task4['training_and_val_dataloader'].dataset)}")
     print(f"Test dataset size: {len(data_task4['test_dataloader'].dataset)}")
 
+    #training with NLLLoss func.
     task4(training_val_dataloader=data_task4['training_and_val_dataloader'],
         test_dataloader=data_task4['test_dataloader'],
         X_test_tensor=data_task4['X_test_tensor'],
         y_test=data_task4['y_test'],
         lossfunc='nllloss')
 
+    #training with BCELoss func.
     task4(training_val_dataloader=data_task4['training_and_val_dataloader'],
         test_dataloader=data_task4['test_dataloader'],
         X_test_tensor=data_task4['X_test_tensor'],
