@@ -77,7 +77,6 @@ def train_eval_model(train_loader,
     avg_val_epoch_loss = []
 
     for epoch in range(epochs):
-        #print("-"*10, f"Epoch {epoch}", "-"*10)
         epoch_train_loss = 0
         model.train() # modus flag for training
         for batch_idx, (data, target) in enumerate(train_loader):
