@@ -104,8 +104,6 @@ def train_eval_model(train_loader,
 
         avg_val_epoch_loss.append(epoch_val_loss/len(val_loader))
         
-        #print(f"Epoch {epoch}: Train Loss: {epoch_train_loss/len(train_loader):.4f}, Val Loss: {epoch_val_loss/len(val_loader):.4f}\n")
-
     return avg_train_epoch_loss, avg_val_epoch_loss
 
 def train_eval_model_binary(train_loader,
@@ -170,8 +168,8 @@ def train_eval_model_binary(train_loader,
 
         avg_val_epoch_loss.append(epoch_val_loss/len(test_loader))
         
-        print(f"Epoch {epoch}: Train Loss: {epoch_train_loss/len(train_loader):.4f}, \
-               Val Loss: {epoch_val_loss/len(test_loader):.4f} \
+        print(f"Epoch {epoch}: Train Loss: {epoch_train_loss/len(train_loader):.3f}, \
+               Val Loss: {epoch_val_loss/len(test_loader):.3f} \
                 Accuracy: {round(avg_correct*100, 1)}%\n")
 
     return avg_train_epoch_loss, avg_val_epoch_loss, avg_accuracies
@@ -579,20 +577,20 @@ def task2(training_dataloader, val_dataloader):
                 data = {
                     'HL': len(model_arch.layers) - 1,
                     'HU': model_arch.layer_sizes[1:-1],
-                    'Final train loss': f"{train_loss[-1]:.4f}",
-                    'Best train loss': f"{best_train_row['train_loss']:.4f}",
+                    'Final train loss': f"{train_loss[-1]:.3f}",
+                    'Best train loss': f"{best_train_row['train_loss']:.3f}",
                     'Best train loss epoch': int(best_train_row['epochs']),
-                    'Final val loss': f"{val_loss[-1]:.4f}",
-                    'Best val loss': f"{best_val_row['val_loss']:.4f}",
+                    'Final val loss': f"{val_loss[-1]:.3f}",
+                    'Best val loss': f"{best_val_row['val_loss']:.3f}",
                     'Best val loss epoch': int(best_val_row['epochs']),
                     'Learning Rate': learning_rate,
                     'Total epochs': epoch_num
                 }
                 df_data.append(data)
-                print(f"Final Training Loss: {train_loss[-1]}\n")
-                print(f"Final Val Loss: {val_loss[-1]}\n")
-                print(f"Best Training Loss: {best_train_row['train_loss']} | Epoch: {best_train_row['epochs']}\n")
-                print(f"Best Val Loss: {best_val_row['val_loss']} | Epoch: {best_val_row['epochs']}\n")
+                print(f"Final Training Loss: {train_loss[-1]:.3f}\n")
+                print(f"Final Val Loss: {val_loss[-1]:.3f}\n")
+                print(f"Best Training Loss: {best_train_row['train_loss']:.3f} | Epoch: {best_train_row['epochs']:.3f}\n")
+                print(f"Best Val Loss: {best_val_row['val_loss']:.3f} | Epoch: {best_val_row['epochs']:.3f}\n")
                 plot_loss_curve(train_loss=train_loss, val_loss=val_loss, export_folder=folder)
     df = pd.DataFrame(df_data)
     df.to_excel("exports/losses/training_model_variation_test.xlsx")
@@ -629,10 +627,10 @@ def task3(training_and_val_dataloader, test_dataloader):
     best_train_row = new_df.nsmallest(1, 'train_loss').iloc[0]
     best_test_row   = new_df.nsmallest(1, 'test_loss').iloc[0]
     print("-"*30)
-    print(f"Final Training Loss: {train_loss[-1]}\n")
-    print(f"Final Test Loss: {test_loss[-1]}\n")
-    print(f"Best Training Loss: {best_train_row['train_loss']} | Epoch: {best_train_row['epochs']}\n")
-    print(f"Best Test Loss: {best_test_row['test_loss']} | Epoch: {best_test_row['epochs']}\n")
+    print(f"Final Training Loss: {train_loss[-1]:.3f}\n")
+    print(f"Final Test Loss: {test_loss[-1]:.3f}\n")
+    print(f"Best Training Loss: {best_train_row['train_loss']:.3f} | Epoch: {best_train_row['epochs']:.3f}\n")
+    print(f"Best Test Loss: {best_test_row['test_loss']:.3f} | Epoch: {best_test_row['epochs']:.3f}\n")
     print("-"*30)
     plot_loss_curve(
         train_loss=train_loss,
@@ -688,10 +686,10 @@ def task4(training_val_dataloader, test_dataloader, X_test_tensor, y_test, lossf
     best_train_row = new_df.nsmallest(1, 'train_loss').iloc[0]
     best_test_row   = new_df.nsmallest(1, 'test_loss').iloc[0]
     print("-"*30)
-    print(f"Final Training Loss: {train_loss[-1]}\n")
-    print(f"Final Test Loss: {val_loss[-1]}\n")
-    print(f"Best Training Loss: {best_train_row['train_loss']} | Epoch: {best_train_row['epochs']}\n")
-    print(f"Best Test Loss: {best_test_row['test_loss']} | Epoch: {best_test_row['epochs']}\n")
+    print(f"Final Training Loss: {train_loss[-1]:.3f}\n")
+    print(f"Final Test Loss: {val_loss[-1]:.3f}\n")
+    print(f"Best Training Loss: {best_train_row['train_loss']:.3f} | Epoch: {best_train_row['epochs']:.3f}\n")
+    print(f"Best Test Loss: {best_test_row['test_loss']:.3f} | Epoch: {best_test_row['epochs']:.3f}\n")
     print("-"*30)
 
     plot_loss_accuracy_curve(train_loss=train_loss,
@@ -716,7 +714,7 @@ def task4(training_val_dataloader, test_dataloader, X_test_tensor, y_test, lossf
 
 def main():
     data = task1()
-    #task2(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
+    task2(training_dataloader=data['training_dataloader'], val_dataloader=data['val_dataloader'])
     final_trained_model = task3(training_and_val_dataloader=data['training_and_val_dataloader'],
                                             test_dataloader=data['test_dataloader'])
     task3_predict(model=final_trained_model,
